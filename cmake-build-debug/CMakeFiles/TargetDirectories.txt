@@ -1,0 +1,4 @@
+C:/Users/bashk/CLionProjects/CG_Project/cmake-build-debug/CMakeFiles/CG_Project.dir
+C:/Users/bashk/CLionProjects/CG_Project/cmake-build-debug/CMakeFiles/Shaders.dir
+C:/Users/bashk/CLionProjects/CG_Project/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/bashk/CLionProjects/CG_Project/cmake-build-debug/CMakeFiles/rebuild_cache.dir
