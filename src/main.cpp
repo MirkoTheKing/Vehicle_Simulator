@@ -112,6 +112,8 @@ class VehicleSimulator : public BaseProject {
     void populateCommandBuffer(VkCommandBuffer commandBuffer, int CurrentImage) {}
 
     //APP logic
+
+
     void updateUniformBuffer(uint32_t currentImage){}
 
 
