@@ -113,7 +113,7 @@ class VehicleSimulator : public BaseProject {
 
     //APP logic
 
-
+    //APP logic
     void updateUniformBuffer(uint32_t currentImage){}
 
 
