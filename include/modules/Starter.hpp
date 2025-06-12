@@ -114,7 +114,7 @@ struct VertexBindingDescriptorElement {
 	VkVertexInputRate inputRate;
 };
 
-enum VertexDescriptorElementUsage {POSITION, NORMAL, UV, COLOR, TANGENT, POS2D, OTHER};
+enum VertexDescriptorElementUsage {POSITION, NORMAL, UV, COLOR, TANGENT, POS2D, JOINTWEIGHT, JOINTINDEX, OTHER};
 
 struct VertexDescriptorElement {
 	uint32_t binding;
@@ -139,6 +139,8 @@ struct VertexDescriptor {
 	VertexComponent UV;
 	VertexComponent Color;
 	VertexComponent Tangent;
+	VertexComponent JointWeight;
+	VertexComponent JointIndex;
 
 	std::vector<VertexBindingDescriptorElement> Bindings;
 	std::vector<VertexDescriptorElement> Layout;
@@ -2633,6 +2635,8 @@ void VertexDescriptor::init(BaseProject *bp, std::vector<VertexBindingDescriptor
 	UV.hasIt = false; UV.offset = 0;
 	Color.hasIt = false; Color.offset = 0;
 	Tangent.hasIt = false; Tangent.offset = 0;
+	JointWeight.hasIt = false; JointWeight.offset = 0;
+	JointIndex.hasIt = false; JointIndex.offset = 0;
 	
 	if(B.size() <= 1) {	// for now, read models only with every vertex information in a single binding
 		for(int i = 0; i < E.size(); i++) {
@@ -2709,6 +2713,30 @@ void VertexDescriptor::init(BaseProject *bp, std::vector<VertexBindingDescriptor
 				  std::cout << "Vertex Tangent - wrong format\n";
 				}
 			    break;
+				case VertexDescriptorElementUsage::JOINTWEIGHT:
+					if(E[i].format == VK_FORMAT_R32G32B32A32_SFLOAT) {
+						if(E[i].size == sizeof(glm::vec4)) {
+							JointWeight.hasIt = true;
+							JointWeight.offset = E[i].offset;
+						} else {
+							std::cout << "Vertex Joint Weight - wrong size\n";
+						}
+					} else {
+						std::cout << "Vertex Joint Weight - wrong format\n";
+					}
+				break;
+				case VertexDescriptorElementUsage::JOINTINDEX:
+					if(E[i].format == VK_FORMAT_R32G32B32A32_UINT) {
+						if(E[i].size == sizeof(glm::uvec4)) {
+							JointIndex.hasIt = true;
+							JointIndex.offset = E[i].offset;
+						} else {
+							std::cout << "Vertex Joint Index - wrong size\n";
+						}
+					} else {
+						std::cout << "Vertex Joint Index - wrong format\n";
+					}
+				break;
 			  default:
 			    break;
 			}
@@ -2816,11 +2844,14 @@ void AssetFile::initGLTF(std::string file) {
 
 
 	for (const auto& mesh :  model.meshes) {
-		std::cout << "Primitives: " << mesh.primitives.size() << " Name:" << mesh.name << "\n";
+		std::cout << " Name:" << mesh.name << " Primitives: " << mesh.primitives.size() << "\n";
 		int PrimCount = 0;
 		for (const auto& primitive :  mesh.primitives) {
 			if (primitive.indices < 0) {
 				continue;
+			} else {
+				std::cout << "Primitive: " << PrimCount << ", Material: " <<
+					primitive.material << " -> " << model.materials[primitive.material].name <<"\n";
 			}
 			GLTFmeshes[mesh.name].push_back(&primitive);
 			PrimCount++;
@@ -2922,18 +2953,24 @@ void Model::makeGLTFMesh(tinygltf::Model *M, const tinygltf::Primitive *Prm) {
 	const float *bufferNormals = nullptr;
 	const float *bufferTangents = nullptr;
 	const float *bufferTexCoords = nullptr;
+	const glm::u8 *bufferJointIndex = nullptr;
+	const float *bufferJointWeight = nullptr;
 	
 	bool meshHasPos = false;
 	bool meshHasNorm = false;
 	bool meshHasTan = false;
 	bool meshHasUV = false;
+	bool meshHasJointIndex = false;
+	bool meshHasJointWeight = false;
 	
 	int cntPos = 0;
 	int cntNorm = 0;
 	int cntTan = 0;
 	int cntUV = 0;
+	int cntJointIndex = 0;
+	int cntJointWeight = 0;
 	int cntTot = 0;
-	
+
 	auto pIt = Prm->attributes.find("POSITION");
 	if(pIt != Prm->attributes.end()) {
 		const tinygltf::Accessor &posAccessor = M->accessors[pIt->second];
@@ -2990,7 +3027,36 @@ void Model::makeGLTFMesh(tinygltf::Model *M, const tinygltf::Primitive *Prm) {
 		}
 	}
 
+	auto iIt = Prm->attributes.find("JOINTS_0");
+	if(iIt != Prm->attributes.end()) {
+		const tinygltf::Accessor &jointAccessor = M->accessors[iIt->second];
+		const tinygltf::BufferView &jointView = M->bufferViews[jointAccessor.bufferView];
+		bufferJointIndex = reinterpret_cast<const glm::u8 *>(&(M->buffers[jointView.buffer].data[jointAccessor.byteOffset + jointView.byteOffset]));
+		meshHasJointIndex = true;
+		cntJointIndex = jointAccessor.count;
+		if(cntJointIndex > cntTot) cntTot = cntJointIndex;
+	} else {
+		if(VD->JointIndex.hasIt) {
+			std::cout << "Warning: vertex layout has Joint, but file hasn't\n";
+		}
+	}
+	auto wIt = Prm->attributes.find("WEIGHTS_0");
+	if(wIt != Prm->attributes.end()) {
+		const tinygltf::Accessor &weightsAccessor = M->accessors[wIt->second];
+		const tinygltf::BufferView &weightsView = M->bufferViews[weightsAccessor.bufferView];
+		bufferJointWeight = reinterpret_cast<const float *>(&(M->buffers[weightsView.buffer].data[weightsAccessor.byteOffset + weightsView.byteOffset]));
+		meshHasJointWeight = true;
+		cntJointWeight = weightsAccessor.count;
+		if(cntJointWeight > cntTot) cntTot = cntJointWeight;
+	} else {
+		if(VD->JointWeight.hasIt) {
+			std::cout << "Warning: vertex layout has Weights, but file hasn't\n";
+		}
+	}
+
 //std::cout << "making vertex array. Stride:" << mainStride << "\n";
+//	std::unordered_map<int, bool> usedIndices;
+
 	for(int i = 0; i < cntTot; i++) {
 		std::vector<unsigned char> vertex(mainStride, 0);
 //std::cout << vertices.size() << "," << vertex.size() << "," << &vertex << " " << &vertex[0] << " ";
@@ -3041,10 +3107,49 @@ void Model::makeGLTFMesh(tinygltf::Model *M, const tinygltf::Primitive *Prm) {
 			*o = texCoord;
 		}
 
+
+		if((i < cntJointIndex) && meshHasJointIndex && VD->JointIndex.hasIt) {
+			glm::uvec4 jointIndex = {
+				(glm::uint)bufferJointIndex[4 * i + 0],
+				(glm::uint)bufferJointIndex[4 * i + 1],
+				(glm::uint)bufferJointIndex[4 * i + 2],
+				(glm::uint)bufferJointIndex[4 * i + 3]
+			};
+//std::cout << jointIndex.x << " " << jointIndex.y << " " << jointIndex.z << " " << jointIndex.w << "\t\t";
+
+//usedIndices[jointIndex.x] = true;
+//usedIndices[jointIndex.y] = true;
+//usedIndices[jointIndex.z] = true;
+//usedIndices[jointIndex.w] = true;
+
+			glm::uvec4 *o = (glm::uvec4 *)((char*)(&vertex[0]) + VD->JointIndex.offset);
+			*o = jointIndex;
+		}
+
+		if((i < cntJointWeight) && meshHasJointWeight && VD->JointWeight.hasIt) {
+			glm::vec4 jointWeight = {
+				bufferJointWeight[4 * i + 0],
+				bufferJointWeight[4 * i + 1],
+				bufferJointWeight[4 * i + 2],
+				bufferJointWeight[4 * i + 3]
+			};
+//std::cout << bufferJointWeight[4 * i + 0] << " " << bufferJointWeight[4 * i + 1] << " " << bufferJointWeight[4 * i + 2] << " " << 
+//				bufferJointWeight[4 * i + 3] << "\n";
+
+			glm::vec4 *o = (glm::vec4 *)((char*)(&vertex[0]) + VD->JointWeight.offset);
+			*o = jointWeight;
+		}
+
 //std::cout << vertices.size() << "," << vertex.size() << " Inserting\n";
 		vertices.insert(vertices.end(), vertex.begin(), vertex.end());
 //std::cout << vertices.size() << " Inserted\n";
 	} 
+
+//std::cout << "Used indices: " << usedIndices.size() << "\n";
+//for(auto kkk: usedIndices) {
+//	std::cout << kkk.first << ", ";
+//}
+//std::cout << "\n";
 
 	const tinygltf::Accessor &accessor = M->accessors[Prm->indices];
 	const tinygltf::BufferView &bufferView = M->bufferViews[accessor.bufferView];
@@ -4276,13 +4381,12 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 	uniformBuffersMemory.resize(size);
 	toFree.resize(size);
 
-//std::cout << "Descriptor set init: " << E.size() << "\n";
 	for (int j = 0; j < size; j++) {
 		uniformBuffers[j].resize(BP->swapChainImages.size());
 		uniformBuffersMemory[j].resize(BP->swapChainImages.size());
-//std::cout << j << " " << E[j].type << "\n";
+//std::cout << j << " " << (DSL->Bindings[j].type) << "\n";
 		if(DSL->Bindings[j].type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
-//std::cout << "Uniform size: " << E[j].size << "\n";
+//std::cout << "Uniform size: " << DSL->Bindings[j].linkSize << "\n";
 			for (size_t i = 0; i < BP->swapChainImages.size(); i++) {
 				VkDeviceSize bufferSize = DSL->Bindings[j].linkSize;
 				BP->createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -4303,7 +4407,7 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 	allocInfo.descriptorPool = BP->descriptorPool;
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(BP->swapChainImages.size());
 	allocInfo.pSetLayouts = layouts.data();
-	
+//std::cout << "Allocating\n";	
 	descriptorSets.resize(BP->swapChainImages.size());
 	
 	VkResult result = vkAllocateDescriptorSets(BP->device, &allocInfo,
@@ -4314,11 +4418,15 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 	}
 	
 	for (size_t i = 0; i < BP->swapChainImages.size(); i++) {
+//std::cout << "Consdering swap chain image " << i << "\n";	
+
 		std::vector<VkWriteDescriptorSet> descriptorWrites(size);
 		std::vector<VkDescriptorBufferInfo> bufferInfo(size);
 		std::vector<VkDescriptorImageInfo> imageInfo(imgInfoSize);
 		for (int j = 0; j < size; j++) {
+//std::cout << "Consdering binding " << j << "\n";	
 			if(DSL->Bindings[j].type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
+//std::cout << "Writing uniform buffer " << j <<"\n";			
 				bufferInfo[j].buffer = uniformBuffers[j][i];
 				bufferInfo[j].offset = 0;
 				bufferInfo[j].range = DSL->Bindings[j].linkSize;
@@ -4331,15 +4439,18 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 				descriptorWrites[j].descriptorCount = DSL->Bindings[j].count;
 				descriptorWrites[j].pBufferInfo = &bufferInfo[j];
 			} else if(DSL->Bindings[j].type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+//std::cout << "Writing combined image sampler " << j << ", count " << DSL->Bindings[j].count << ", link " << DSL->Bindings[j].linkSize << "\n";
 				for(int k = 0; k < DSL->Bindings[j].count; k++) {
 					int h = DSL->Bindings[j].linkSize + k;
+//std::cout << k << " " << h << " " << (&VaSs[h]) << "\n";
 					VkDescriptorImageInfo VaS = VaSs[h];
+//std::cout << VaS.imageView << " " << VaS.sampler << "\n";
 					imageInfo[h] = VaS;
 /*					imageInfo[h].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 					imageInfo[h].imageView = VaS.textureImageView;
 					imageInfo[h].sampler = VaS.textureSampler;
 */				}
-		
+//std::cout << "Writing descriptor sets\n";			
 				descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				descriptorWrites[j].dstSet = descriptorSets[i];
 				descriptorWrites[j].dstBinding = DSL->Bindings[j].binding;
@@ -4350,6 +4461,7 @@ void DescriptorSet::init(BaseProject *bp, DescriptorSetLayout *DSL,
 				descriptorWrites[j].pImageInfo = &imageInfo[DSL->Bindings[j].linkSize];
 			}
 		}		
+//std::cout << "Updating descriptor sets\n";	
 		vkUpdateDescriptorSets(BP->device,
 						static_cast<uint32_t>(descriptorWrites.size()),
 						descriptorWrites.data(), 0, nullptr);

@@ -1,0 +1,44 @@
+{
+  "models": [
+    {"id": "a1", "VD": "VMesh", "model": "assets/models/apartment_1_001_apartment_1_001.004.mgcg", "format":"MGCG"},
+    {"id": "a2", "VD": "VMesh", "model": "assets/models/apartment_1_002.mgcg", "format":"MGCG"},
+    {"id": "a7", "VD": "VMesh", "model": "assets/models/apartment_003.mgcg", "format":"MGCG"},
+    {"id": "bar", "VD": "VMesh", "model": "assets/models/barrel_002.mgcg", "format":"MGCG"},
+    {"id": "veh", "VD": "VMesh", "model": "assets/models/transport_cool_003_transport_cool_003.001.mgcg", "format":"MGCG"}
+
+  ],
+  "textures": [
+  {"id": "city", "texture": "assets/textures/textures.png", "format": "D"}
+  ],
+
+  "instances": [
+    {"technique": "Simple", "elements": [
+      {"id":  "veh", "model": "veh", "texture": ["city"]},
+      {"id":  "a1", "model":  "a1", "texture":  ["city"],
+      "transform": [1, 0, 0, 0,
+                    0, 0, -1, -50,
+                    0, 1, 0, 0,
+                    0, 0, 0, 1]},
+      {"id":  "a2", "model": "a2", "texture": ["city"],
+        "transform": [1, 0, 0, 20,
+          0, 0, -1, -30,
+          0, 1, 0, 0,
+          0, 0, 0, 1]},
+      {"id":  "bar", "model": "bar", "texture": ["city"],
+        "transform": [1, 0, 0, 0,
+          0, 0, -1, -10,
+          0, 1, 0, 0,
+          0, 0, 0, 1]},
+      {"id": "a7", "model": "a7", "texture": ["city"],
+      "transform": [1, 0, 0, 10,
+        0, 0, -1, -40,
+        0, 1, 0, 0,
+        0, 0, 0, 1]}
+    ]}
+
+  ]
+
+
+}
+
+

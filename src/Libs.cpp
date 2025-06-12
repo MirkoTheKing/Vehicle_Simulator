@@ -6,3 +6,7 @@
 #define  TEXTMAKER_IMPLEMENTATION
 #include "modules/TextMaker.hpp"
 
+#define  SCENE_IMPLEMENTATION
+#include "modules/Scene.hpp"
+
+
