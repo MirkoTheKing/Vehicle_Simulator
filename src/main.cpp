@@ -8,7 +8,7 @@
 
 #define Width 800
 #define Height 600
-#define MAX_YAW glm::radians(180.0f)
+#define MAX_YAW glm::radians(360.0f)
 
 struct UniformBufferObject {
     alignas(4) float amb;
@@ -45,10 +45,14 @@ class VehicleSimulator : public BaseProject {
     glm::mat4 Prj = glm::mat4(1.0f);
     glm::mat4 View = glm::mat4(1.0f);
     glm::vec3 carPos = glm::vec3(0.0f);
+    glm::vec3 offset = glm::vec3(0.0f,3.0f,2.0f);
+    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
     float carYaw = 0.0f;
     float cameraYaw = 0.0f;
     float objectYaw = 0.0f;
+    float move_speed = 2.0f;
     bool rotate = false;
+    bool camRot = false;
     //Here we will list all the object needed for our project
 
     DescriptorSetLayout DSLgubo, DSLmesh;
@@ -114,6 +118,10 @@ class VehicleSimulator : public BaseProject {
 
         //Pipelines
         Pmesh.init(this, &Vmesh, "shaders/Mesh.vert.spv", "shaders/Mesh.frag.spv", {&DSLgubo, &DSLmesh});
+
+
+        Pmesh.setCullMode(VK_CULL_MODE_NONE);
+
 
         PRs.resize(1);
         PRs[0].init("Simple", {
@@ -187,16 +195,21 @@ class VehicleSimulator : public BaseProject {
     void updateUniformBuffer(uint32_t currentImage) {
 
         gameLogic(window);
+        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0,0,1));
+        glm::vec4 rotatedOffset = rotation * glm::vec4(offset, 1.0f);
+        cameraPos = glm::vec3(rotatedOffset) + carPos;
 
-        cameraPos = glm::vec3(0.0f, 3.0f, 2.0f) + carPos;
+        glm::vec4 rotatedUp = rotation * glm::vec4(0, 1, 0, 0);
+        up = glm::normalize(glm::vec3(rotatedUp));
+
         Prj = glm::perspective(FOVy, aspectRatio, nearPlane, farPlane);
-        View =  glm::lookAt(cameraPos, carPos, glm::vec3(0,1,0));
+        View =  glm::lookAt(cameraPos, carPos, up);
 
 
         GlobalUniformBufferObject gubo{};
         gubo.lightDir = lightDir;
-        gubo.lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-        gubo.ambLightColor = glm::vec3(1.0f);
+        gubo.lightColor = glm::vec4(0.8f, 0.7f, 0.70f, 1.0f);
+        gubo.ambLightColor = glm::vec3(0.6f);
         gubo.eyePos = cameraPos;
 
         UniformBufferObject ubo{};
@@ -212,7 +225,7 @@ class VehicleSimulator : public BaseProject {
             ubo.mMat   = SC.TI[0].I[instanceId].Wm;
             ubo.mvpMat = Prj * View * ubo.mMat;
             ubo.nMat   = glm::inverse(glm::transpose(ubo.mMat));
-            ubo.amb = 1.0f; ubo.gamma = 180.0f; ubo.sColor = glm::vec3(1.0f);
+            ubo.amb = 0.3f; ubo.gamma = 180.0f; ubo.sColor = glm::vec3(0.8f);
             SC.TI[0].I[instanceId].DS[0][0]->map(currentImage, &gubo, 0); // Set 0
             SC.TI[0].I[instanceId].DS[0][1]->map(currentImage, &ubo, 0);// Set 1
 
@@ -227,8 +240,6 @@ class VehicleSimulator : public BaseProject {
         auto currentTime = std::chrono::high_resolution_clock::now();
         float deltaT = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
-
-        const float move_speed = 2.0f;
         const float rotate_speed = 1.0f;
 
         if (glfwGetKey(window, GLFW_KEY_W) ==GLFW_PRESS) {
@@ -255,8 +266,30 @@ class VehicleSimulator : public BaseProject {
                 objectYaw=deltaT*rotate_speed;
                 rotate = true;
             }
+        }
+        if (glfwGetKey(window, GLFW_KEY_E) ==GLFW_PRESS) {
+                cameraYaw+=deltaT*rotate_speed;
+        }
+        if (glfwGetKey(window, GLFW_KEY_Q) ==GLFW_PRESS) {
+            cameraYaw-=deltaT*rotate_speed;
+        }
+
+        if (glfwGetKey(window, GLFW_KEY_F) ==GLFW_PRESS) {
+            if (move_speed<10.0f) {
+                move_speed=move_speed + 1.0f;
+                std::cout << "move_speed = " << move_speed << std::endl;
+            }
 
         }
+        if (glfwGetKey(window, GLFW_KEY_C) ==GLFW_PRESS) {
+            if (move_speed>1.0f) {
+                move_speed = move_speed-1.0f;
+                std::cout << "move_speed = " << move_speed << std::endl;
+            }
+        }
+
+
+
 
 
 
