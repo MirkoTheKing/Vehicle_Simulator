@@ -8,7 +8,7 @@
 
 #define Width 800
 #define Height 600
-#define MAX_YAW glm::radians(360.0f)
+
 
 struct UniformBufferObject {
     alignas(4) float amb;
@@ -56,7 +56,7 @@ protected:
     bool camRot = false;
     bool crash_detected = false;
     int num_crashes = 0;
-
+    char instruction[120] = "hi";
     //Here we will list all the object needed for our project
 
     DescriptorSetLayout DSLgubo, DSLmesh;
@@ -64,6 +64,7 @@ protected:
     VertexDescriptor Vmesh;
     RenderPass RP;
     Pipeline Pmesh;
+    TextMaker txt;
 
     Scene SC;
     std::vector<VertexDescriptorRef> VDRs;
@@ -83,6 +84,8 @@ protected:
         aspectRatio = (float) w / (float) h;
         RP.width = w;
         RP.height = h;
+        txt.resizeScreen(w, h);
+
     }
 
     //Here we initialize the descriptor set layouts and our models
@@ -160,6 +163,8 @@ protected:
             std::cout << "ERROR LOADING THE SCENE\n";
             exit(0);
         }
+        txt.init(this, windowWidth, windowHeight);
+
 
         submitCommandBuffer("main", 0, populateCommandBufferAccess, this);
     }
@@ -170,6 +175,7 @@ protected:
         Pmesh.create(&RP);
 
         SC.pipelinesAndDescriptorSetsInit();
+        txt.pipelinesAndDescriptorSetsInit();
     }
 
     //Here the cleanup of the pipelines and descriptor sets
@@ -177,6 +183,7 @@ protected:
         Pmesh.cleanup();
         RP.cleanup();
         SC.pipelinesAndDescriptorSetsCleanup();
+        txt.pipelinesAndDescriptorSetsCleanup();
     }
 
     // Here you destroy all the Models, Texture and Desc. Set Layouts you created!
@@ -189,6 +196,7 @@ protected:
         Pmesh.destroy();
         RP.destroy();
         SC.localCleanup();
+        txt.localCleanup();
     }
 
     static void populateCommandBufferAccess(VkCommandBuffer commandBuffer, int currentImage, void *Params) {
@@ -246,6 +254,19 @@ protected:
             SC.TI[0].I[instanceId].DS[0][0]->map(currentImage, &gubo, 0); // Set 0
             SC.TI[0].I[instanceId].DS[0][1]->map(currentImage, &ubo, 0); // Set 1
         }
+
+        std:: ostringstream speed;
+        std:: ostringstream crashes;
+        std:: ostringstream instr;
+        speed<<"Speed:  "<<move_speed<<"\n";
+        crashes<<"Damage:: " << num_crashes<<"\n";
+        instr <<instruction;
+        txt.print(1.0f, 1.0f, speed.str(), 1, "CO", false, true, false,TAL_RIGHT,TRH_RIGHT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        txt.print(-1.0f, 1.0f, crashes.str(), 2, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        txt.print(-1.0f, -0.9f, instr.str(), 3, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+
+
+        txt.updateCommandBuffer();
     }
 
     void gameLogic(GLFWwindow *window) {
@@ -291,18 +312,16 @@ protected:
             }
         }
         if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-            if (carYaw >= -MAX_YAW) {
                 carYaw -= deltaT * rotate_speed;
                 objectYaw = -deltaT * rotate_speed;
                 rotate = true;
-            }
+
         }
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-            if (carYaw <= MAX_YAW) {
                 carYaw += deltaT * rotate_speed;
                 objectYaw = deltaT * rotate_speed;
                 rotate = true;
-            }
+
         }
         if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
             cameraYaw += deltaT * rotate_speed;
@@ -323,6 +342,7 @@ protected:
                 std::cout << "move_speed = " << move_speed << std::endl;
             }
         }
+
     }
 
     bool check_position(glm::vec3 pos) {
