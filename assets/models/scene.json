@@ -25,15 +25,19 @@
     {"id": "enter", "VD": "VMesh", "model": "assets/models/landscape_entertainments_008.mgcg", "format":"MGCG"},
     {"id": "manu", "VD": "VMesh", "model": "assets/models/manufacture_009.mgcg", "format":"MGCG"},
     {"id": "park1", "VD": "VMesh", "model": "assets/models/park_004.mgcg", "format":"MGCG"},
-    {"id": "basket", "VD": "VMesh", "model": "assets/models/landscape_entertainments_010.mgcg", "format":"MGCG"}
+    {"id": "basket", "VD": "VMesh", "model": "assets/models/landscape_entertainments_010.mgcg", "format":"MGCG"},
+    {"id": "coin", "VD": "VMesh", "model": "assets/models/Coin_Star_Gold.mgcg", "format":"MGCG"}
+
   ],
   "textures": [
-  {"id": "city", "texture": "assets/textures/textures.png", "format": "D"}
+    {"id": "city", "texture": "assets/textures/textures.png", "format": "D"},
+    {"id":  "coin", "texture":  "assets/textures/Coin_Star_Gold_Normal.png", "format":  "D"}
   ],
 
   "instances": [
     {"technique": "Simple", "elements": [
       {"id":  "veh", "model": "veh", "texture": ["city"]},
+      {"id": "coin", "model":  "coin", "texture": ["coin"]},
       {"id":  "gen", "model": "gen", "texture": ["city"],"transform": [100, 0, 0, 0,
                                                                        0, 0, -100, 0,
                                                                        0, 1, 0, -0.25,

@@ -3,11 +3,13 @@
 #include "modules/Starter.hpp"
 #include "modules/TextMaker.hpp"
 #include "modules/Scene.hpp"
+#include "GameState.cpp"
 
 // this should work, i am doing it to try and  do a pull request
 
 #define Width 800
 #define Height 600
+#define MAX_DAMAGE 5
 
 
 struct UniformBufferObject {
@@ -57,6 +59,8 @@ protected:
     bool crash_detected = false;
     int num_crashes = 0;
     char instruction[120] = "hi";
+    GameState state = GameState::GoToPark;
+    bool GameOver = false;
     //Here we will list all the object needed for our project
 
     DescriptorSetLayout DSLgubo, DSLmesh;
@@ -277,72 +281,185 @@ protected:
         float deltaT = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
         const float rotate_speed = 1.0f;
-
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-            if (check_position(carPos + move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                                           glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
-                                                                   0, -1, 0, 1)) * deltaT) == true) {
-                carPos += move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                             glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
-                        deltaT;
-                crash_detected = false;
-            }
-            else {
-                if (crash_detected== false) {
-                    num_crashes++;
-                    crash_detected = true;
+        if (!GameOver) {
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+                if (check_position(carPos + move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                                                                               glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
+                                                                       0, -1, 0, 1)) * deltaT) == true) {
+                    carPos += move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                                                                 glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
+                            deltaT;
+                    std::cout<<"Pos:(x,y) "<<carPos.x <<" " <<carPos.y <<"\n ";
+                    crash_detected = false;
+                                                                       }
+                else {
+                    if (crash_detected== false) {
+                        num_crashes++;
+                        crash_detected = true;
+                        if (num_crashes>=MAX_DAMAGE) {
+                            state = GameState::GameOver;
+                            GameOver = true;
+                        }
+                    }
                 }
             }
-        }
 
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-            if (check_position(carPos - move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                                           glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
-                                                                   0, -1, 0, 1)) * deltaT) == true) {
-                carPos -= move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                             glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
-                        deltaT;
-                crash_detected = false;
-            }
-            else {
-                if (crash_detected== false) {
-                    num_crashes++;
-                    crash_detected = true;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+                if (check_position(carPos - move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                                                                               glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
+                                                                       0, -1, 0, 1)) * deltaT) == true) {
+                    carPos -= move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                                                                 glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
+                            deltaT;
+                    std::cout<<"Pos:(x,y) "<<carPos.x <<" " <<carPos.y <<" \n";
+                    crash_detected = false;
+                                                                       }
+                else {
+                    if (crash_detected== false) {
+                        num_crashes++;
+                        crash_detected = true;
+                        if (num_crashes>=MAX_DAMAGE) {
+                            state = GameState::GameOver;
+                            GameOver = true;
+                        }
+                    }
                 }
             }
-        }
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
                 carYaw -= deltaT * rotate_speed;
                 objectYaw = -deltaT * rotate_speed;
                 rotate = true;
 
-        }
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+            }
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
                 carYaw += deltaT * rotate_speed;
                 objectYaw = deltaT * rotate_speed;
                 rotate = true;
 
-        }
-        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
-            cameraYaw += deltaT * rotate_speed;
-        }
-        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-            cameraYaw -= deltaT * rotate_speed;
-        }
+            }
+            if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+                cameraYaw += deltaT * rotate_speed;
+            }
+            if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+                cameraYaw -= deltaT * rotate_speed;
+            }
 
-        if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
-            if (move_speed < 10.0f) {
-                move_speed = move_speed + 1.0f;
-                std::cout << "move_speed = " << move_speed << std::endl;
+            if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+                if (move_speed < 10.0f) {
+                    move_speed = move_speed + 1.0f;
+                    std::cout << "move_speed = " << move_speed << std::endl;
+                }
+            }
+            if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+                if (move_speed > 1.0f) {
+                    move_speed = move_speed - 1.0f;
+                    std::cout << "move_speed = " << move_speed << std::endl;
+                }
             }
         }
-        if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
-            if (move_speed > 1.0f) {
-                move_speed = move_speed - 1.0f;
-                std::cout << "move_speed = " << move_speed << std::endl;
+        else {
+            if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS) {
+                state = GameState::GoToPark;
+                carPos = glm::vec3(0.0f,0.0f,0.0f);
+                rotate = false;
+                camRot = false;
+                crash_detected = false;
+                GameOver = false;
+                num_crashes = 0;
+                move_speed = 2.0f;
             }
         }
 
+        gameState(carPos);
+
+
+    }
+
+    void gameState(glm::vec3 pos) {
+            switch (state) {
+                case GameState::GoToPark:
+                    SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
+                    strcpy(instruction, "Go to the small park");
+                    if (carPos.x>=40.0f and carPos.x<42.0f) {
+                        if (carPos.y>=-26.8 and carPos.y<-24.0f) {
+                            state = GameState::GoToBank;
+                            strcpy(instruction, "Go to the bank");
+                            SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(-15.1456f,-1.14702f,0.0f), 1.0f);
+
+                        }
+                    }
+                break;
+                case GameState::GoToBank:
+                    if (carPos.x>=-16.1456f and carPos.x<-14.0f) {
+                        if (carPos.y>=-2.0f and carPos.y<-0.1f) {
+                            state = GameState::GoToParking;
+                            strcpy(instruction, "Go to the parking lot");
+                            SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(1.11423f,-44.9671f,0.0f), 1.0f);
+
+                        }
+                    }
+                break;
+                case GameState::GoToParking:
+                    if (carPos.x>=0.3f and carPos.x<2.0f) {
+                        if (carPos.y>=-45.50f and carPos.y<-44.8f) {
+                            state = GameState::GoToFactory;
+                            strcpy(instruction, "Go to the small factory");
+                            SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(23.631f,-81.322f,0.0f), 1.0f);
+
+                        }
+                    }
+                break;
+                case GameState::GoToFactory:
+                    if (carPos.x>=22.5f and carPos.x<24.5f) {
+                        if (carPos.y>=-82.50f and carPos.y<-80.0f) {
+                            state = GameState::GoToStore;
+                            strcpy(instruction, "Go to the store next city");
+                            SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(-137.365f,-11.0243f,0.0f), 1.0f);
+
+                        }
+                    }
+                break;
+                case GameState::GoToStore:
+                    if (carPos.x>=-138.3f and carPos.x<-136.5f) {
+                        if (carPos.y>=-12.20f and carPos.y<-10.0f) {
+                            state = GameState::GoToSecFactory;
+                            strcpy(instruction, "Go to the factory ahead of you");
+                            SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(-137.189f,-62.9413f,0.0f), 1.0f);
+
+                        }
+                    }
+                break;
+                case GameState::GoToSecFactory:
+                    if (carPos.x>=-138.3f and carPos.x<-136.5f) {
+                        if (carPos.y>=-64.0f and carPos.y<-61.9f) {
+                            state = GameState::Return;
+                            strcpy(instruction, "Return to spawn to win the game");
+                            SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(0.0f,0.0f,0.0f), 1.0f);
+
+                        }
+                    }
+                break;
+                case GameState::Return:
+                    if (carPos.x>=-1.0f and carPos.x<1.0f) {
+                        if (carPos.y>=-1.0f and carPos.y<1.0f) {
+                            state = GameState::GameWon;
+                            SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(0.0f,0.0f,500.0f), 1.0f);
+
+                        }
+                    }
+                break;
+                case GameState::GameOver:
+                    strcpy(instruction, "Game Over. Press O to restart");
+                    SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(0.0f,0.0f,500.0f), 1.0f);
+                case GameState::GameWon:
+                    strcpy(instruction, "You Won. Press O to restart");
+                    GameOver = true;
+                break;
+
+
+
+
+            }
     }
 
     bool check_position(glm::vec3 pos) {
