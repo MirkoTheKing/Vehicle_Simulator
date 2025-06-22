@@ -59,7 +59,7 @@ protected:
     bool crash_detected = false;
     int num_crashes = 0;
     char instruction[120] = "hi";
-    GameState state = GameState::GoToPark;
+    GameState state = GameState::SplashScreen;
     bool GameOver = false;
     //Here we will list all the object needed for our project
 
@@ -222,6 +222,8 @@ protected:
     //APP logic
     void updateUniformBuffer(uint32_t currentImage) {
         gameLogic(window);
+
+        RP.properties[0].clearValue = {0.6f, 0.8f, 1.0f, 1.0f};
         glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 0, 1));
         glm::vec4 rotatedOffset = rotation * glm::vec4(offset, 1.0f);
         cameraPos = glm::vec3(rotatedOffset) + carPos;
@@ -259,21 +261,40 @@ protected:
             SC.TI[0].I[instanceId].DS[0][1]->map(currentImage, &ubo, 0); // Set 1
         }
 
-        std:: ostringstream speed;
-        std:: ostringstream crashes;
-        std:: ostringstream instr;
-        speed<<"Speed:  "<<move_speed<<"\n";
-        crashes<<"Damage:: " << num_crashes<<"\n";
-        instr <<instruction;
-        txt.print(1.0f, 1.0f, speed.str(), 1, "CO", false, true, false,TAL_RIGHT,TRH_RIGHT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
-        txt.print(-1.0f, 1.0f, crashes.str(), 2, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
-        txt.print(-1.0f, -0.9f, instr.str(), 3, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        if(state == GameState::SplashScreen) {
+            std:: ostringstream instr;
+            instr << "\n\n\nVEHICLE SIMULATOR\n\n";
+            instr << "Controls:\n\n";
+            instr << "W: Move Forward\n";
+            instr << "S: Move Backward\n";
+            instr << "A: Turn Left\n";
+            instr << "D: Turn Right\n";
+            instr << "Q/E: Rotate Camera\n\n";
+            instr << "Press P to Start";
+            txt.print(0.0f, 0.0f, instr.str(), 3, "CO", false, true, false, TAL_CENTER, TRH_CENTER, TRV_MIDDLE, {1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        } else {
+            std:: ostringstream speed;
+            std:: ostringstream crashes;
+            std:: ostringstream instr;
+            speed<<"Speed:  "<<move_speed<<"\n";
+            crashes<<"Damage:: " << num_crashes<<"\n";
+            instr <<instruction;
+            txt.print(1.0f, 1.0f, speed.str(), 1, "CO", false, true, false,TAL_RIGHT,TRH_RIGHT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+            txt.print(-1.0f, 1.0f, crashes.str(), 2, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+            txt.print(-1.0f, -0.9f, instr.str(), 3, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        }
 
 
         txt.updateCommandBuffer();
     }
 
     void gameLogic(GLFWwindow *window) {
+        if(state == GameState::SplashScreen) {
+            if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+                state = GameState::GoToPark;
+            }
+            return;
+        }
         static auto startTime = std::chrono::high_resolution_clock::now();
         static auto lastTime = startTime;
 
@@ -377,6 +398,8 @@ protected:
 
     void gameState(glm::vec3 pos) {
             switch (state) {
+                case GameState::SplashScreen:
+                    break;
                 case GameState::GoToPark:
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
                     strcpy(instruction, "Go to the small park");
