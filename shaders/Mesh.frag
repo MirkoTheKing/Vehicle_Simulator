@@ -8,10 +8,10 @@ layout(location = 2) in vec2 fragUV;
 layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 0) uniform GlobalUniformBufferObject {
-    vec3 DlightDir;		// direction of the direct light
-    vec3 DlightColor;	// color of the direct light
-    vec3 AmbLightColor;	// ambient light
-    vec3 eyePos;		// position of the viewer
+    vec3 DlightDir;
+    vec3 DlightColor;
+    vec3 AmbLightColor;
+    vec3 eyePos;
 } gubo;
 
 layout(set = 1, binding = 0) uniform UniformBufferObject {
@@ -26,21 +26,24 @@ layout(set = 1, binding = 0) uniform UniformBufferObject {
 layout(set = 1, binding = 1) uniform sampler2D tex;
 
 void main() {
-    vec3 N = normalize(fragNorm);				// surface normal
-    vec3 V = normalize(gubo.eyePos - fragPos);	// viewer direction
-    vec3 L = normalize(gubo.DlightDir);			// light direction
+    vec3 N = normalize(fragNorm);
+    vec3 V = normalize(gubo.eyePos - fragPos);
+    vec3 L = normalize(gubo.DlightDir);
+    vec3 H = normalize(L + V);
 
-    vec3 albedo = texture(tex, fragUV).rgb;		// main color
+    float NdotL = max(dot(N, L), 0.0);
+    float NdotH = max(dot(N, H), 0.0);
+
+    vec3 albedo = texture(tex, fragUV).rgb;
     vec3 MD = albedo;
     vec3 MS = ubo.sColor;
     vec3 MA = albedo * ubo.amb;
     vec3 LA = gubo.AmbLightColor;
 
-    // Write the shader here
+    vec3 diffuse = MD * NdotL;
+    vec3 specular = MS * pow(NdotH, ubo.gamma);
+    vec3 ambient = LA * MA;
 
-    outColor = vec4(
-    clamp(MD * clamp(dot(L,N),0.0f,1.0f) +
-    MS * pow(clamp(dot(N, normalize(L + V)), 0.0f, 1.0f), ubo.gamma) +
-    LA * MA,
-    0.0f, 1.0f), 1.0f);	// output color
+    vec3 color = clamp(diffuse + specular + ambient, 0.0, 1.0);
+    outColor = vec4(color, 1.0);
 }

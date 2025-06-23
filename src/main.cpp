@@ -4,7 +4,7 @@
 #include "modules/TextMaker.hpp"
 #include "modules/Scene.hpp"
 #include "GameState.cpp"
-
+#include "Timer.cpp"
 // this should work, i am doing it to try and  do a pull request
 
 #define Width 800
@@ -54,6 +54,7 @@ protected:
     float cameraYaw = 0.0f;
     float objectYaw = 0.0f;
     float move_speed = 2.0f;
+    float back_speed = 2.0f;
     bool rotate = false;
     bool camRot = false;
     bool crash_detected = false;
@@ -61,6 +62,7 @@ protected:
     char instruction[120] = "hi";
     GameState state = GameState::GoToPark;
     bool GameOver = false;
+    Timer timer;
     //Here we will list all the object needed for our project
 
     DescriptorSetLayout DSLgubo, DSLmesh;
@@ -171,6 +173,8 @@ protected:
 
 
         submitCommandBuffer("main", 0, populateCommandBufferAccess, this);
+        timer.start();
+
     }
 
     // Here you create your pipelines and Descriptor Sets!
@@ -215,12 +219,14 @@ protected:
         SC.populateCommandBuffer(commandBuffer, 0, CurrentImage);
 
         RP.end(commandBuffer);
+
     }
 
     //APP logic
 
     //APP logic
     void updateUniformBuffer(uint32_t currentImage) {
+        timer.update();
         gameLogic(window);
         glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 0, 1));
         glm::vec4 rotatedOffset = rotation * glm::vec4(offset, 1.0f);
@@ -262,12 +268,15 @@ protected:
         std:: ostringstream speed;
         std:: ostringstream crashes;
         std:: ostringstream instr;
+        std:: ostringstream t;
         speed<<"Speed:  "<<move_speed<<"\n";
         crashes<<"Damage:: " << num_crashes<<"\n";
         instr <<instruction;
+        t<< timer.getElapsedTime();
         txt.print(1.0f, 1.0f, speed.str(), 1, "CO", false, true, false,TAL_RIGHT,TRH_RIGHT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
         txt.print(-1.0f, 1.0f, crashes.str(), 2, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
         txt.print(-1.0f, -0.9f, instr.str(), 3, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        txt.print(0.0f, -0.9f, t.str(), 4, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
 
 
         txt.updateCommandBuffer();
@@ -281,11 +290,15 @@ protected:
         float deltaT = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
         const float rotate_speed = 1.0f;
+        const float acc = 1.0f;
         if (!GameOver) {
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
                 if (check_position(carPos + move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                                glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
                                                                        0, -1, 0, 1)) * deltaT) == true) {
+                    if (move_speed<=10) {
+                        move_speed+=acc * deltaT;
+                    }
                     carPos += move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                  glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
                             deltaT;
@@ -308,9 +321,10 @@ protected:
                 if (check_position(carPos - move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                                glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
                                                                        0, -1, 0, 1)) * deltaT) == true) {
-                    carPos -= move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                    carPos -= back_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                  glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
                             deltaT;
+                    move_speed = 2.0f;
                     std::cout<<"Pos:(x,y) "<<carPos.x <<" " <<carPos.y <<" \n";
                     crash_detected = false;
                                                                        }
@@ -343,22 +357,15 @@ protected:
             if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
                 cameraYaw -= deltaT * rotate_speed;
             }
+            if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+                if (move_speed>=2.0f) {
+                    move_speed -=1.0f;
+                }
+            }
 
-            if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
-                if (move_speed < 10.0f) {
-                    move_speed = move_speed + 1.0f;
-                    std::cout << "move_speed = " << move_speed << std::endl;
-                }
-            }
-            if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
-                if (move_speed > 1.0f) {
-                    move_speed = move_speed - 1.0f;
-                    std::cout << "move_speed = " << move_speed << std::endl;
-                }
-            }
         }
         else {
-            if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS) {
+            if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
                 state = GameState::GoToPark;
                 carPos = glm::vec3(0.0f,0.0f,0.0f);
                 rotate = false;
@@ -367,8 +374,10 @@ protected:
                 GameOver = false;
                 num_crashes = 0;
                 move_speed = 2.0f;
+                timer.start();
             }
         }
+
 
         gameState(carPos);
 
@@ -376,6 +385,12 @@ protected:
     }
 
     void gameState(glm::vec3 pos) {
+        if (timer.getElapsedTime()>=60.0f) {
+            state = GameState::GameOver;
+            GameOver = true;
+            timer.stop();
+        }
+
             switch (state) {
                 case GameState::GoToPark:
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
@@ -449,12 +464,14 @@ protected:
                     }
                 break;
                 case GameState::GameOver:
-                    strcpy(instruction, "Game Over. Press O to restart");
+                    strcpy(instruction, "Game Over. Press R to restart");
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(0.0f,0.0f,500.0f), 1.0f);
+                break;
                 case GameState::GameWon:
-                    strcpy(instruction, "You Won. Press O to restart");
+                    strcpy(instruction, "You Won. Press R to restart");
                     GameOver = true;
                 break;
+
 
 
 
