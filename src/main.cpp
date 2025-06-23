@@ -60,7 +60,7 @@ protected:
     bool crash_detected = false;
     int num_crashes = 0;
     char instruction[120] = "hi";
-    GameState state = GameState::GoToPark;
+    GameState state = GameState::SplashScreen;
     bool GameOver = false;
     Timer timer;
     //Here we will list all the object needed for our project
@@ -283,6 +283,12 @@ protected:
     }
 
     void gameLogic(GLFWwindow *window) {
+        if(state == GameState::SplashScreen) {
+            if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+                state = GameState::GoToPark;
+            }
+            return;
+        }
         static auto startTime = std::chrono::high_resolution_clock::now();
         static auto lastTime = startTime;
 
@@ -392,6 +398,8 @@ protected:
         }
 
             switch (state) {
+                case GameState::SplashScreen:
+                    break;
                 case GameState::GoToPark:
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
                     strcpy(instruction, "Go to the small park");
