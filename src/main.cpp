@@ -173,7 +173,7 @@ protected:
 
 
         submitCommandBuffer("main", 0, populateCommandBufferAccess, this);
-        timer.start();
+
 
     }
 
@@ -265,19 +265,33 @@ protected:
             SC.TI[0].I[instanceId].DS[0][1]->map(currentImage, &ubo, 0); // Set 1
         }
 
-        std:: ostringstream speed;
-        std:: ostringstream crashes;
-        std:: ostringstream instr;
-        std:: ostringstream t;
-        speed<<"Speed:  "<<move_speed<<"\n";
-        crashes<<"Damage:: " << num_crashes<<"\n";
-        instr <<instruction;
-        t<< timer.getElapsedTime();
-        txt.print(1.0f, 1.0f, speed.str(), 1, "CO", false, true, false,TAL_RIGHT,TRH_RIGHT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
-        txt.print(-1.0f, 1.0f, crashes.str(), 2, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
-        txt.print(-1.0f, -0.9f, instr.str(), 3, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
-        txt.print(0.0f, -0.9f, t.str(), 4, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        if(state == GameState::SplashScreen) {
+            std:: ostringstream instr;
+            instr << "\n\n\nVEHICLE SIMULATOR\n\n";
+            instr << "Controls:\n\n";
+            instr << "W: Move Forward\n";
+            instr << "S: Move Backward\n";
+            instr << "A: Turn Left\n";
+            instr << "D: Turn Right\n";
+            instr << "Q/E: Rotate Camera\n\n";
+            instr << "Space to break\n\n";
+            instr << "Press P to Start";
+            txt.print(0.0f, 0.0f, instr.str(), 3, "CO", false, true, false, TAL_CENTER, TRH_CENTER, TRV_MIDDLE, {1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        } else {
+            std:: ostringstream speed;
+            std:: ostringstream crashes;
+            std:: ostringstream instr;
+            std:: ostringstream time;
+            speed<<"Speed:  "<<move_speed<<"\n";
+            crashes<<"Damage:: " << num_crashes<<"\n";
+            instr <<instruction;
+            time <<timer.getElapsedTime();
+            txt.print(1.0f, 1.0f, speed.str(), 1, "CO", false, true, false,TAL_RIGHT,TRH_RIGHT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+            txt.print(-1.0f, 1.0f, crashes.str(), 2, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+            txt.print(-1.0f, -0.9f, instr.str(), 3, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+            txt.print(0.0f, -0.9f, time.str(), 4, "CO", false, true, false,TAL_LEFT,TRH_LEFT,TRV_BOTTOM,{1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
 
+        }
 
         txt.updateCommandBuffer();
     }
@@ -286,6 +300,7 @@ protected:
         if(state == GameState::SplashScreen) {
             if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
                 state = GameState::GoToPark;
+                timer.start();
             }
             return;
         }
@@ -391,7 +406,7 @@ protected:
     }
 
     void gameState(glm::vec3 pos) {
-        if (timer.getElapsedTime()>=60.0f) {
+        if (timer.getElapsedTime()>=300.0f) {
             state = GameState::GameOver;
             GameOver = true;
             timer.stop();
@@ -466,6 +481,7 @@ protected:
                     if (carPos.x>=-1.0f and carPos.x<1.0f) {
                         if (carPos.y>=-1.0f and carPos.y<1.0f) {
                             state = GameState::GameWon;
+                            timer.stop();
                             SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(0.0f,0.0f,500.0f), 1.0f);
 
                         }
@@ -473,6 +489,7 @@ protected:
                 break;
                 case GameState::GameOver:
                     strcpy(instruction, "Game Over. Press R to restart");
+                    timer.stop();
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(0.0f,0.0f,500.0f), 1.0f);
                 break;
                 case GameState::GameWon:
