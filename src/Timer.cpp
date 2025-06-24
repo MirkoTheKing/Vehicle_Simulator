@@ -1,4 +1,3 @@
-
 #include "chrono"
 
 class Timer{
@@ -22,6 +21,10 @@ public:
 
       float getElapsedTime(){
         return elapsed;
+      }
+
+      float getDelta() {
+        return delta;
       }
       void stop() {
         stopped = true;

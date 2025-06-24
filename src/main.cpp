@@ -1,4 +1,5 @@
 #include <sstream>
+#include <cstring>
 
 #include "modules/Starter.hpp"
 #include "modules/TextMaker.hpp"
@@ -34,6 +35,15 @@ struct Vertex {
     glm::vec2 UV;
 };
 
+struct QuadVertex {
+    glm::vec2 pos;
+    glm::vec2 texCoord;
+};
+
+struct ImageUniformBufferObject {
+    alignas(16) glm::mat4 mvp;
+};
+
 class VehicleSimulator : public BaseProject {
 protected:
     float aspectRatio;
@@ -47,6 +57,7 @@ protected:
     const float farPlane = 100.0f;
     glm::mat4 Prj = glm::mat4(1.0f);
     glm::mat4 View = glm::mat4(1.0f);
+    glm::mat4 initialCarMatrix = glm::mat4(1.0f); // Store initial car transformation
     glm::vec3 carPos = glm::vec3(0.0f);
     glm::vec3 offset = glm::vec3(0.0f, 3.0f, 2.0f);
     glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -63,6 +74,15 @@ protected:
     GameState state = GameState::SplashScreen;
     bool GameOver = false;
     Timer timer;
+
+    // Fullscreen image rendering components
+    DescriptorSetLayout DSLimage;
+    VertexDescriptor Vquad;
+    Pipeline Pimage;
+    Model Mquad;
+    Texture TSplash, TControls;
+    DescriptorSet DSSplash, DSControls;
+
     //Here we will list all the object needed for our project
 
     DescriptorSetLayout DSLgubo, DSLmesh;
@@ -76,26 +96,30 @@ protected:
     std::vector<VertexDescriptorRef> VDRs;
     std::vector<TechniqueRef> PRs;
 
-
-    void setWindowParameters() {
+    void setWindowParameters()
+    {
         windowWidth = Width;
         windowHeight = Height;
         windowTitle = "VehicleSimulator";
-        windowResizable = GLFW_TRUE;
+        
+        // Set window to non-resizable initially (for splash screen)
+        // This will be updated when the state changes to game state
+        windowResizable = GLFW_FALSE;
+        
         initialBackgroundColor = {0.1f, 0.1f, 0.2f, 1.0f};
         aspectRatio = 4 / 3;
-    }
-
-    void onWindowResize(int w, int h) {
-        aspectRatio = (float) w / (float) h;
-        RP.width = w;
-        RP.height = h;
-        txt.resizeScreen(w, h);
-
-    }
-
-    //Here we initialize the descriptor set layouts and our models
+    }void onWindowResize(int w, int h) {
+        // Only process window resize if we're in a game state (not splash/controls screen)
+        if (state != GameState::SplashScreen && state != GameState::ControlsScreen) {
+            aspectRatio = (float) w / (float) h;
+            RP.width = w;
+            RP.height = h;
+            txt.resizeScreen(w, h);
+        }
+    }    //Here we initialize the descriptor set layouts and our models
     void localInit() {
+        // Ensure window resizability is set correctly based on initial state
+        updateWindowResizability();
         DSLgubo.init(this, {
                          // this array contains the binding:
                          // first  element : the binding number
@@ -118,6 +142,15 @@ protected:
                          {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 1}
                      });
 
+        // Initialize descriptor set layout for fullscreen images
+        DSLimage.init(this, {
+                         {
+                             0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT,
+                             sizeof(ImageUniformBufferObject), 1
+                         },
+                         {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0, 1}
+                     });
+
         Vmesh.init(this, {
                        {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX}
                    }, {
@@ -135,17 +168,47 @@ protected:
                        }
                    });
 
-        VDRs.resize(1);
-        VDRs[0].init("VMesh", &Vmesh);
+        // Initialize vertex descriptor for fullscreen quad
+        Vquad.init(this, {
+                       {0, sizeof(QuadVertex), VK_VERTEX_INPUT_RATE_VERTEX}
+                   }, {
+                       {
+                           0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(QuadVertex, pos),
+                           sizeof(glm::vec2), POSITION
+                       },
+                       {
+                           0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(QuadVertex, texCoord),
+                           sizeof(glm::vec2), UV
+                       }
+                   });
 
-        RP.init(this);
+        VDRs.resize(1);
+        VDRs[0].init("VMesh", &Vmesh);        RP.init(this);
         RP.properties[0].clearValue = {0.6f, 0.8f, 1.0f, 1.0f};
 
         //Pipelines
         Pmesh.init(this, &Vmesh, "shaders/Mesh.vert.spv", "shaders/Mesh.frag.spv", {&DSLgubo, &DSLmesh});
-
+        Pimage.init(this, &Vquad, "shaders/Image.vert.spv", "shaders/Image.frag.spv", {&DSLimage});
 
         Pmesh.setCullMode(VK_CULL_MODE_NONE);
+        Pimage.setCullMode(VK_CULL_MODE_NONE);
+
+        // Load splash screen and controls textures
+        TSplash.init(this, "assets/textures/SplashScreen.png");
+        TControls.init(this, "assets/textures/Controls.png");        // Create fullscreen quad model        // Create vertices for a fullscreen quad
+        std::vector<QuadVertex> quadVertices = {
+            {{-1.0f, -1.0f}, {0.0f, 0.0f}},  // Bottom-left
+            {{ 1.0f, -1.0f}, {1.0f, 0.0f}},  // Bottom-right
+            {{ 1.0f,  1.0f}, {1.0f, 1.0f}},  // Top-right
+            {{-1.0f,  1.0f}, {0.0f, 1.0f}}   // Top-left
+        };
+        std::vector<uint32_t> quadIndices = {0, 1, 2, 2, 3, 0};
+
+        // Manually set the vertices and indices for the quad
+        Mquad.vertices.resize(quadVertices.size() * sizeof(QuadVertex));
+        memcpy(Mquad.vertices.data(), quadVertices.data(), quadVertices.size() * sizeof(QuadVertex));
+        Mquad.indices = quadIndices;
+        Mquad.initMesh(this, &Vquad);
 
 
         PRs.resize(1);
@@ -158,11 +221,10 @@ protected:
                                     /*t0*/{true, 0, {}} // index 0 of the "texture" field in the json file
                                 }
                             }
-                        }
-                    }, /*TotalNtextures*/1, &Vmesh);
-        DPSZs.uniformBlocksInPool = 3;
-        DPSZs.texturesInPool = 4;
-        DPSZs.setsInPool = 3;
+                        }                    }, /*TotalNtextures*/1, &Vmesh);
+        DPSZs.uniformBlocksInPool = 5;
+        DPSZs.texturesInPool = 6;
+        DPSZs.setsInPool = 5;
 
         std::cout << "\nLoading the scene\n\n";
         if (SC.init(this, /*Npasses*/1, VDRs, PRs, "assets/models/scene.json") != 0) {
@@ -175,59 +237,97 @@ protected:
         submitCommandBuffer("main", 0, populateCommandBufferAccess, this);
 
 
-    }
-
-    // Here you create your pipelines and Descriptor Sets!
-    void pipelinesAndDescriptorSetsInit() {
+    }    // Here you create your pipelines and Descriptor Sets!
+    void pipelinesAndDescriptorSetsInit()
+    {
         RP.create();
         Pmesh.create(&RP);
+        Pimage.create(&RP);        // Create descriptor sets for images
+        DSSplash.init(this, &DSLimage, {TSplash.getViewAndSampler()});
+        DSControls.init(this, &DSLimage, {TControls.getViewAndSampler()});
 
         SC.pipelinesAndDescriptorSetsInit();
         txt.pipelinesAndDescriptorSetsInit();
-    }
-
-    //Here the cleanup of the pipelines and descriptor sets
-    void pipelinesAndDescriptorSetsCleanup() {
+    }    //Here the cleanup of the pipelines and descriptor sets
+    void pipelinesAndDescriptorSetsCleanup()
+    {
         Pmesh.cleanup();
+        Pimage.cleanup();
+        DSSplash.cleanup();
+        DSControls.cleanup();
         RP.cleanup();
         SC.pipelinesAndDescriptorSetsCleanup();
         txt.pipelinesAndDescriptorSetsCleanup();
-    }
-
-    // Here you destroy all the Models, Texture and Desc. Set Layouts you created!
+    }    // Here you destroy all the Models, Texture and Desc. Set Layouts you created!
     // All the object classes defined in Starter.hpp have a method .cleanup() for this purpose
     // You also have to destroy the pipelines: since they need to be rebuilt, they have two different
     // methods: .cleanup() recreates them, while .destroy() delete them completely
     void localCleanup() {
         DSLgubo.cleanup();
         DSLmesh.cleanup();
+        DSLimage.cleanup();
         Pmesh.destroy();
+        Pimage.destroy();
+        Mquad.cleanup();
+        TSplash.cleanup();
+        TControls.cleanup();
         RP.destroy();
         SC.localCleanup();
         txt.localCleanup();
-    }
-
-    static void populateCommandBufferAccess(VkCommandBuffer commandBuffer, int currentImage, void *Params) {
+    }    static void populateCommandBufferAccess(VkCommandBuffer commandBuffer, int currentImage, void *Params) {
         VehicleSimulator *T = (VehicleSimulator *) Params;
         T->populateCommandBuffer(commandBuffer, currentImage);
-    }
+    }    void populateCommandBuffer(VkCommandBuffer commandBuffer, int CurrentImage) {
+        RP.begin(commandBuffer, CurrentImage);        if (state == GameState::SplashScreen || state == GameState::ControlsScreen) {            // Render fullscreen image
+            ImageUniformBufferObject iubo{};
+            iubo.mvp = glm::mat4(1.0f); // Identity matrix for fullscreen quad (already corrected in vertex data)
 
+            if (state == GameState::SplashScreen) {
+                DSSplash.bind(commandBuffer, Pimage, 0, CurrentImage);
+                DSSplash.map(CurrentImage, &iubo, 0);
+            } else {
+                DSControls.bind(commandBuffer, Pimage, 0, CurrentImage);
+                DSControls.map(CurrentImage, &iubo, 0);
+            }
 
-    void populateCommandBuffer(VkCommandBuffer commandBuffer, int CurrentImage) {
-        RP.begin(commandBuffer, CurrentImage);
-
-        SC.populateCommandBuffer(commandBuffer, 0, CurrentImage);
+            Pimage.bind(commandBuffer);
+            Mquad.bind(commandBuffer);
+            vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(Mquad.indices.size()), 1, 0, 0, 0);
+        } else {
+            // Render normal game scene
+            SC.populateCommandBuffer(commandBuffer, 0, CurrentImage);
+        }
 
         RP.end(commandBuffer);
-
-    }
-
-    //APP logic
-
-    //APP logic
-    void updateUniformBuffer(uint32_t currentImage) {
+    }    // Method to update window resizability based on current game state
+    void updateWindowResizability() {
+        // Make window resizable only in game states, not in splash or controls screens
+        bool shouldBeResizable = (state != GameState::SplashScreen && state != GameState::ControlsScreen);
+        
+        // Only update if the current state doesn't match what we want
+        if ((shouldBeResizable && windowResizable == GLFW_FALSE) || 
+            (!shouldBeResizable && windowResizable == GLFW_TRUE)) {
+            
+            // Update the window resizable property
+            windowResizable = shouldBeResizable ? GLFW_TRUE : GLFW_FALSE;
+            
+            // Apply the change to the GLFW window
+            glfwSetWindowAttrib(window, GLFW_RESIZABLE, windowResizable);
+        }
+    }    //APP logic    //APP logic
+    void updateUniformBuffer(uint32_t currentImage)
+    {
         timer.update();
         gameLogic(window);
+
+        // Check if state changed and update window resizability
+        static GameState lastState = state;
+        if (lastState != state) {
+            // Update window resizability when state changes
+            updateWindowResizability();
+            lastState = state;
+        }
+
         glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 0, 1));
         glm::vec4 rotatedOffset = rotation * glm::vec4(offset, 1.0f);
         cameraPos = glm::vec3(rotatedOffset) + carPos;
@@ -236,6 +336,7 @@ protected:
         up = glm::normalize(glm::vec3(rotatedUp));
 
         Prj = glm::perspective(FOVy, aspectRatio, nearPlane, farPlane);
+        // Apply a Y-flip to the view matrix to correct orientation
         View = glm::lookAt(cameraPos, carPos, up);
 
 
@@ -264,19 +365,9 @@ protected:
             SC.TI[0].I[instanceId].DS[0][0]->map(currentImage, &gubo, 0); // Set 0
             SC.TI[0].I[instanceId].DS[0][1]->map(currentImage, &ubo, 0); // Set 1
         }
-
-        if(state == GameState::SplashScreen) {
-            std:: ostringstream instr;
-            instr << "\n\n\nVEHICLE SIMULATOR\n\n";
-            instr << "Controls:\n\n";
-            instr << "W: Move Forward\n";
-            instr << "S: Move Backward\n";
-            instr << "A: Turn Left\n";
-            instr << "D: Turn Right\n";
-            instr << "Q/E: Rotate Camera\n\n";
-            instr << "Space to break\n\n";
-            instr << "Press P to Start";
-            txt.print(0.0f, 0.0f, instr.str(), 3, "CO", false, true, false, TAL_CENTER, TRH_CENTER, TRV_MIDDLE, {1.0f,0.0f,0.0f,1.0f},{0.8f,0.8f,0.0f,1.0f});
+        if(state == GameState::SplashScreen || state == GameState::ControlsScreen)
+            {
+            // No need to update the scene's uniform buffers in splash or controls screens
         } else {
             std:: ostringstream speed;
             std:: ostringstream crashes;
@@ -294,22 +385,82 @@ protected:
         }
 
         txt.updateCommandBuffer();
-    }
+    }    void gameLogic(GLFWwindow *window) {
+        // Improved key handling with proper debounce timing
+        static bool pKeyWasPressed = false;
+        static double lastKeyPressTime = 0.0;
+        const double keyDebounceTime = 0.5; // Increased debounce time for more reliable detection
 
-    void gameLogic(GLFWwindow *window) {
-        if(state == GameState::SplashScreen) {
-            if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) {
+        // Get current timestamp for debouncing
+        double currentTime = glfwGetTime();
+          // Check if P key is currently pressed
+        int pKeyState = glfwGetKey(window, GLFW_KEY_P);
+        bool pKeyIsPressed = (pKeyState == GLFW_PRESS);        // Detect key press event (transition from not pressed to pressed)
+        // Only process if enough time has passed since last press
+        if (pKeyIsPressed && !pKeyWasPressed && (currentTime - lastKeyPressTime) > keyDebounceTime) {
+            // Record the time of this press
+            lastKeyPressTime = currentTime;            // Handle state transitions based on current state
+            if (state == GameState::SplashScreen) {
+                state = GameState::ControlsScreen;
+                // Update window resizability for the new state
+                updateWindowResizability();
+                // Force a command buffer update to refresh the screen
+                recreateSwapChain();
+            } else if (state == GameState::ControlsScreen) {
                 state = GameState::GoToPark;
                 timer.start();
+                // Update window resizability for the new state
+                updateWindowResizability();
+                // Force a command buffer update to refresh the screen
+                recreateSwapChain();            } else if (state == GameState::GameOver || state == GameState::GameWon) {                // Restart directly to game state instead of splash screen
+                state = GameState::GoToPark;
+                GameOver = false;
+                carPos = glm::vec3(0.0f);
+                carYaw = 0.0f;
+                objectYaw = 0.0f;
+                cameraYaw = 0.0f;
+                num_crashes = 0;
+                move_speed = 2.0f;                // Reset car's position and apply correct orientation
+                SC.TI[0].I[0].Wm = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                
+                // Update the position
+                SC.TI[0].I[0].Wm[3] = glm::vec4(carPos, 1.0f);
+                
+                // Reset coin position to the first target location
+                SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
+                strcpy(instruction, "Go to the small park");
+                // Restart the timer
+                timer.start();
+                // Update window resizability for the new state
+                updateWindowResizability();
+                // Force a command buffer update to refresh the screen
+                recreateSwapChain();
+            }
+        }        // Update the key state for the next frame
+        pKeyWasPressed = pKeyIsPressed;
+
+        // If we're in splash or controls screen, we just need to make sure the static
+        // screen content is displayed - no movement logic needed
+        if(state == GameState::SplashScreen || state == GameState::ControlsScreen) {
+            static bool firstTimeDrawing = true;
+            if (firstTimeDrawing) {
+                // On first run, make sure the descriptor sets are properly initialized
+                ImageUniformBufferObject iubo{};
+                iubo.mvp = glm::mat4(1.0f);
+                if (state == GameState::SplashScreen) {
+                    DSSplash.map(0, &iubo, 0);
+                } else {
+                    DSControls.map(0, &iubo, 0);
+                }
+                firstTimeDrawing = false;
             }
             return;
-        }
-        static auto startTime = std::chrono::high_resolution_clock::now();
-        static auto lastTime = startTime;
+        }static auto startTime = std::chrono::high_resolution_clock::now();
+        static auto lastFrameTime = startTime;
 
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float deltaT = std::chrono::duration<float>(currentTime - lastTime).count();
-        lastTime = currentTime;
+        auto frameTime = std::chrono::high_resolution_clock::now();
+        float deltaT = std::chrono::duration<float>(frameTime - lastFrameTime).count();
+        lastFrameTime = frameTime;
         const float rotate_speed = 1.0f;
         const float acc = 1.0f;
         if (!GameOver) {
@@ -319,11 +470,9 @@ protected:
                                                                        0, -1, 0, 1)) * deltaT) == true) {
                     if (move_speed<=10) {
                         move_speed+=acc * deltaT;
-                    }
-                    carPos += move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                    }                    carPos += move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                  glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
                             deltaT;
-                    std::cout<<"Pos:(x,y) "<<carPos.x <<" " <<carPos.y <<"\n ";
                     crash_detected = false;
                                                                        }
                 else {
@@ -341,12 +490,10 @@ protected:
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
                 if (check_position(carPos - move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                                glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
-                                                                       0, -1, 0, 1)) * deltaT) == true) {
-                    carPos -= back_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                                                                       0, -1, 0, 1)) * deltaT) == true) {                    carPos -= back_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                  glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
                             deltaT;
                     move_speed = 2.0f;
-                    std::cout<<"Pos:(x,y) "<<carPos.x <<" " <<carPos.y <<" \n";
                     crash_detected = false;
                                                                        }
                 else {
@@ -384,19 +531,9 @@ protected:
                 }
             }
 
-        }
-        else {
-            if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
-                state = GameState::GoToPark;
-                carPos = glm::vec3(0.0f,0.0f,0.0f);
-                rotate = false;
-                camRot = false;
-                crash_detected = false;
-                GameOver = false;
-                num_crashes = 0;
-                move_speed = 2.0f;
-                timer.start();
-            }
+        }        else {
+            // Game over state is now handled by the P key through the standard input handling
+            // Just keep this section for possible future extensions
         }
 
 
@@ -410,10 +547,10 @@ protected:
             state = GameState::GameOver;
             GameOver = true;
             timer.stop();
-        }
-
-            switch (state) {
+        }            switch (state) {
                 case GameState::SplashScreen:
+                    break;
+                case GameState::ControlsScreen:
                     break;
                 case GameState::GoToPark:
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
@@ -486,17 +623,15 @@ protected:
 
                         }
                     }
-                break;
-                case GameState::GameOver:
-                    strcpy(instruction, "Game Over. Press R to restart");
+                break;                case GameState::GameOver:
+                    strcpy(instruction, "Game Over. Press P to restart game");
                     timer.stop();
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(0.0f,0.0f,500.0f), 1.0f);
                 break;
                 case GameState::GameWon:
-                    strcpy(instruction, "You Won. Press R to restart");
+                    strcpy(instruction, "You Won! Press P to play again");
                     GameOver = true;
                 break;
-
 
 
 

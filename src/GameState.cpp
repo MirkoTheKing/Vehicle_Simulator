@@ -1,5 +1,6 @@
 enum class GameState{
   SplashScreen,
+  ControlsScreen,
   GoToPark,
   GoToBank,
   GoToParking,
