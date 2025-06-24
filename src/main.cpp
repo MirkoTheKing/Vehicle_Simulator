@@ -274,11 +274,15 @@ protected:
         RP.destroy();
         SC.localCleanup();
         txt.localCleanup();
-    }    static void populateCommandBufferAccess(VkCommandBuffer commandBuffer, int currentImage, void *Params) {
+    }
+    static void populateCommandBufferAccess(VkCommandBuffer commandBuffer, int currentImage, void *Params) {
         VehicleSimulator *T = (VehicleSimulator *) Params;
         T->populateCommandBuffer(commandBuffer, currentImage);
-    }    void populateCommandBuffer(VkCommandBuffer commandBuffer, int CurrentImage) {
-        RP.begin(commandBuffer, CurrentImage);        if (state == GameState::SplashScreen || state == GameState::ControlsScreen) {            // Render fullscreen image
+    }
+    void populateCommandBuffer(VkCommandBuffer commandBuffer, int CurrentImage) {
+        RP.begin(commandBuffer, CurrentImage);
+        if (state == GameState::SplashScreen || state == GameState::ControlsScreen)
+            {            // Render fullscreen image
             ImageUniformBufferObject iubo{};
             iubo.mvp = glm::mat4(1.0f); // Identity matrix for fullscreen quad (already corrected in vertex data)
 
@@ -304,9 +308,10 @@ protected:
         // Make window resizable only in game states, not in splash or controls screens
         bool shouldBeResizable = (state != GameState::SplashScreen && state != GameState::ControlsScreen);
         
-        // Only update if the current state doesn't match what we want
+
         if ((shouldBeResizable && windowResizable == GLFW_FALSE) || 
-            (!shouldBeResizable && windowResizable == GLFW_TRUE)) {
+            (!shouldBeResizable && windowResizable == GLFW_TRUE))
+            {
             
             // Update the window resizable property
             windowResizable = shouldBeResizable ? GLFW_TRUE : GLFW_FALSE;
@@ -314,7 +319,7 @@ protected:
             // Apply the change to the GLFW window
             glfwSetWindowAttrib(window, GLFW_RESIZABLE, windowResizable);
         }
-    }    //APP logic    //APP logic
+    }    //APP logic
     void updateUniformBuffer(uint32_t currentImage)
     {
         timer.update();
@@ -322,7 +327,8 @@ protected:
 
         // Check if state changed and update window resizability
         static GameState lastState = state;
-        if (lastState != state) {
+        if (lastState != state)
+        {
             // Update window resizability when state changes
             updateWindowResizability();
             lastState = state;
@@ -351,11 +357,13 @@ protected:
 
         int instanceId;
         SC.TI[0].I[0].Wm[3] = glm::vec4(carPos, 1.0f);
-        if (rotate == true) {
+        if (rotate == true)
+        {
             SC.TI[0].I[0].Wm = glm::rotate(SC.TI[0].I[0].Wm, objectYaw, glm::vec3(0.0f, 1.0f, 0.0f));
             rotate = false;
         }
-        for (instanceId = 0; instanceId < SC.TI[0].InstanceCount; instanceId++) {
+        for (instanceId = 0; instanceId < SC.TI[0].InstanceCount; instanceId++)
+        {
             ubo.mMat = SC.TI[0].I[instanceId].Wm;
             ubo.mvpMat = Prj * View * ubo.mMat;
             ubo.nMat = glm::inverse(glm::transpose(ubo.mMat));
@@ -385,7 +393,8 @@ protected:
         }
 
         txt.updateCommandBuffer();
-    }    void gameLogic(GLFWwindow *window) {
+    }    void gameLogic(GLFWwindow *window)
+    {
         // Improved key handling with proper debounce timing
         static bool pKeyWasPressed = false;
         static double lastKeyPressTime = 0.0;
@@ -397,7 +406,8 @@ protected:
         int pKeyState = glfwGetKey(window, GLFW_KEY_P);
         bool pKeyIsPressed = (pKeyState == GLFW_PRESS);        // Detect key press event (transition from not pressed to pressed)
         // Only process if enough time has passed since last press
-        if (pKeyIsPressed && !pKeyWasPressed && (currentTime - lastKeyPressTime) > keyDebounceTime) {
+        if (pKeyIsPressed && !pKeyWasPressed && (currentTime - lastKeyPressTime) > keyDebounceTime)
+            {
             // Record the time of this press
             lastKeyPressTime = currentTime;            // Handle state transitions based on current state
             if (state == GameState::SplashScreen) {
@@ -407,12 +417,15 @@ protected:
                 // Force a command buffer update to refresh the screen
                 recreateSwapChain();
             } else if (state == GameState::ControlsScreen) {
+
                 state = GameState::GoToPark;
                 timer.start();
                 // Update window resizability for the new state
                 updateWindowResizability();
                 // Force a command buffer update to refresh the screen
-                recreateSwapChain();            } else if (state == GameState::GameOver || state == GameState::GameWon) {                // Restart directly to game state instead of splash screen
+                recreateSwapChain();
+            }
+            else if (state == GameState::GameOver || state == GameState::GameWon) {
                 state = GameState::GoToPark;
                 GameOver = false;
                 carPos = glm::vec3(0.0f);
@@ -429,9 +442,9 @@ protected:
                 // Reset coin position to the first target location
                 SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
                 strcpy(instruction, "Go to the small park");
-                // Restart the timer
+
                 timer.start();
-                // Update window resizability for the new state
+
                 updateWindowResizability();
                 // Force a command buffer update to refresh the screen
                 recreateSwapChain();
@@ -443,7 +456,8 @@ protected:
         // screen content is displayed - no movement logic needed
         if(state == GameState::SplashScreen || state == GameState::ControlsScreen) {
             static bool firstTimeDrawing = true;
-            if (firstTimeDrawing) {
+            if (firstTimeDrawing)
+                {
                 // On first run, make sure the descriptor sets are properly initialized
                 ImageUniformBufferObject iubo{};
                 iubo.mvp = glm::mat4(1.0f);
@@ -464,7 +478,8 @@ protected:
         const float rotate_speed = 1.0f;
         const float acc = 1.0f;
         if (!GameOver) {
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+                {
                 if (check_position(carPos + move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                                glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
                                                                        0, -1, 0, 1)) * deltaT) == true) {
@@ -476,7 +491,8 @@ protected:
                     crash_detected = false;
                                                                        }
                 else {
-                    if (crash_detected== false) {
+                    if (crash_detected== false)
+                        {
                         num_crashes++;
                         crash_detected = true;
                         if (num_crashes>=MAX_DAMAGE) {
@@ -487,7 +503,8 @@ protected:
                 }
             }
 
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+                {
                 if (check_position(carPos - move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
                                                                                glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
                                                                        0, -1, 0, 1)) * deltaT) == true) {                    carPos -= back_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
