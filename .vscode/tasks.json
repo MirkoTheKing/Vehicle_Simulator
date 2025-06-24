@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build CG Project",
+			"type": "shell",
+			"command": "cd cmake-build-debug && .\\CG_Project.exe",
+			"group": "build",
+			"isBackground": false
+		}
+	]
+}
