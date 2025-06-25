@@ -350,7 +350,11 @@ protected:
             lastState = state;
         }
 
-        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), cameraYaw, glm::vec3(0, 0, 1));
+        // Camera automatically follows car rotation to maintain relative view
+        // Use total camera yaw = manual camera yaw + car yaw for automatic following
+        float totalCameraYaw = cameraYaw + carYaw;
+        
+        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), totalCameraYaw, glm::vec3(0, 0, 1));
         glm::vec4 rotatedOffset = rotation * glm::vec4(offset, 1.0f);
         cameraPos = glm::vec3(rotatedOffset) + carPos;
 
