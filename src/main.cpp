@@ -64,7 +64,6 @@ protected:
     glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
     float carYaw = 0.0f;
     float cameraYaw = 0.0f;
-    float objectYaw = 0.0f;
     float move_speed = 2.0f;
     float back_speed = 2.0f;
     float current_velocity = 0.0f; // Current forward velocity for realistic physics
@@ -74,7 +73,6 @@ protected:
     const float brake_deceleration = 4.0f; // Deceleration when pressing S
     const float min_steering_speed = 0.5f; // Minimum speed required for steering
     const float max_steering_speed = 8.0f; // Speed at which steering becomes less responsive
-    bool rotate = false;
     bool camRot = false;
     bool crash_detected = false;
     int num_crashes = 0;
@@ -374,12 +372,10 @@ protected:
 
 
         int instanceId;
-        SC.TI[0].I[0].Wm[3] = glm::vec4(carPos, 1.0f);
-        if (rotate == true)
-        {
-            SC.TI[0].I[0].Wm = glm::rotate(SC.TI[0].I[0].Wm, objectYaw, glm::vec3(0.0f, 1.0f, 0.0f));
-            rotate = false;
-        }
+        // Create the car's transformation matrix: translation + initial orientation + steering rotation
+        SC.TI[0].I[0].Wm = glm::translate(glm::mat4(1.0f), carPos) * 
+                           glm::rotate(glm::mat4(1.0f), carYaw, glm::vec3(0.0f, 0.0f, 1.0f)) *
+                           glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
         for (instanceId = 0; instanceId < SC.TI[0].InstanceCount; instanceId++)
         {
             ubo.mMat = SC.TI[0].I[instanceId].Wm;
@@ -502,15 +498,10 @@ protected:
                 justResumedFromPause = false; // Reset pause resume flag
                 carPos = glm::vec3(0.0f);
                 carYaw = 0.0f;
-                objectYaw = 0.0f;
                 cameraYaw = 0.0f;
                 num_crashes = 0;
                 move_speed = 2.0f;
-                current_velocity = 0.0f; // Reset velocity for physics                // Reset car's position and apply correct orientation
-                SC.TI[0].I[0].Wm = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-                
-                // Update the position
-                SC.TI[0].I[0].Wm[3] = glm::vec4(carPos, 1.0f);
+                current_velocity = 0.0f; // Reset velocity for physics
                 
                 // Reset coin position to the first target location
                 SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);
@@ -694,19 +685,13 @@ protected:
                 if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
                     float effective_rotation = deltaT * rotate_speed * steering_multiplier * steering_direction;
                     carYaw -= effective_rotation;
-                    objectYaw = -effective_rotation;
-                    rotate = true;
                 }
                 if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
                     float effective_rotation = deltaT * rotate_speed * steering_multiplier * steering_direction;
                     carYaw += effective_rotation;
-                    objectYaw = effective_rotation;
-                    rotate = true;
                 }
             } else {
-                // Car is too slow to steer - reset rotation flags
-                rotate = false;
-                objectYaw = 0.0f;
+                // Car is too slow to steer - no steering happens
             }
             if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
                 cameraYaw += deltaT * rotate_speed;
