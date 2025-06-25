@@ -1,5 +1,6 @@
 #include <sstream>
 #include <cstring>
+#include <iomanip>
 
 #include "modules/Starter.hpp"
 #include "modules/TextMaker.hpp"
@@ -66,6 +67,13 @@ protected:
     float objectYaw = 0.0f;
     float move_speed = 2.0f;
     float back_speed = 2.0f;
+    float current_velocity = 0.0f; // Current forward velocity for realistic physics
+    const float max_speed = 10.0f; // Maximum forward speed
+    const float acceleration = 3.0f; // Acceleration when pressing W
+    const float deceleration = 2.0f; // Natural deceleration (friction)
+    const float brake_deceleration = 4.0f; // Deceleration when pressing S
+    const float min_steering_speed = 0.5f; // Minimum speed required for steering
+    const float max_steering_speed = 8.0f; // Speed at which steering becomes less responsive
     bool rotate = false;
     bool camRot = false;
     bool crash_detected = false;
@@ -76,6 +84,7 @@ protected:
     bool GameOver = false;
     bool escKeyWasPressed = false; // Track ESC key state
     bool pauseTextDisplayed = false; // Track if pause text is already displayed
+    bool justResumedFromPause = false; // Track if we just resumed from pause
     Timer timer;
 
     // Fullscreen image rendering components
@@ -411,7 +420,25 @@ protected:
             std:: ostringstream crashes;
             std:: ostringstream instr;
             std:: ostringstream time;
-            speed<<"Speed:  "<<move_speed<<"\n";
+            
+            // Enhanced speed display with direction and steering info
+            speed << "Speed: " << std::fixed << std::setprecision(1) << abs(current_velocity);
+            if (current_velocity > 0.1f) {
+                speed << " (Forward)";
+            } else if (current_velocity < -0.1f) {
+                speed << " (Reverse)";
+            } else {
+                speed << " (Stopped)";
+            }
+            
+            // Add steering availability indicator
+            if (abs(current_velocity) < min_steering_speed) {
+                speed << " [No Steering]";
+            } else if (abs(current_velocity) > max_steering_speed) {
+                speed << " [Reduced Steering]";
+            }
+            speed << "\n";
+            
             crashes<<"Damage:: " << num_crashes<<"\n";
             instr <<instruction;
             time <<timer.getElapsedTime();
@@ -463,6 +490,7 @@ protected:
                 // Resume the game from pause
                 state = previousGameState;
                 pauseTextDisplayed = false; // Reset pause text flag
+                justResumedFromPause = true; // Flag to reset delta time
                 timer.resume(); // Resume the timer without resetting elapsed time
                 updateWindowResizability();
                 recreateSwapChain();
@@ -471,12 +499,14 @@ protected:
                 state = GameState::GoToPark;
                 GameOver = false;
                 pauseTextDisplayed = false; // Reset pause text flag
+                justResumedFromPause = false; // Reset pause resume flag
                 carPos = glm::vec3(0.0f);
                 carYaw = 0.0f;
                 objectYaw = 0.0f;
                 cameraYaw = 0.0f;
                 num_crashes = 0;
-                move_speed = 2.0f;                // Reset car's position and apply correct orientation
+                move_speed = 2.0f;
+                current_velocity = 0.0f; // Reset velocity for physics                // Reset car's position and apply correct orientation
                 SC.TI[0].I[0].Wm = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                 
                 // Update the position
@@ -532,83 +562,157 @@ protected:
                 firstTimeDrawing = false;
             }
             return;
-        }static auto startTime = std::chrono::high_resolution_clock::now();
+        }
+
+        // Physics timing - handle pause resume properly
+        static auto startTime = std::chrono::high_resolution_clock::now();
         static auto lastFrameTime = startTime;
 
+        // Check if we just resumed from pause (avoid large delta time)
         auto frameTime = std::chrono::high_resolution_clock::now();
-        float deltaT = std::chrono::duration<float>(frameTime - lastFrameTime).count();
-        lastFrameTime = frameTime;
+        float deltaT;
+        
+        if (justResumedFromPause) {
+            // Reset timing when resuming from pause to avoid large delta
+            deltaT = 0.0f; // No movement on the resume frame
+            lastFrameTime = frameTime;
+            justResumedFromPause = false; // Reset the flag
+        } else {
+            deltaT = std::chrono::duration<float>(frameTime - lastFrameTime).count();
+            lastFrameTime = frameTime;
+            
+            // Clamp deltaT to prevent physics issues from large frame times
+            if (deltaT > 0.1f) { // Max 100ms delta to prevent huge jumps
+                deltaT = 0.1f;
+            }
+        }
         const float rotate_speed = 1.0f;
-        const float acc = 1.0f;
+        
         if (!GameOver) {
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                {
-                if (check_position(carPos + move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                                               glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
-                                                                       0, -1, 0, 1)) * deltaT) == true) {
-                    if (move_speed<=10) {
-                        move_speed+=acc * deltaT;
-                    }                    carPos += move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                                 glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
-                            deltaT;
+            // Handle forward acceleration (W key)
+            bool accelerating = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
+            bool braking = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
+            bool space_braking = (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS);
+            
+            // Update velocity based on input
+            if (accelerating && !braking) {
+                // Accelerate forward
+                current_velocity += acceleration * deltaT;
+                if (current_velocity > max_speed) {
+                    current_velocity = max_speed;
+                }
+            } else if (braking) {
+                // Brake (reverse or slow down)
+                if (current_velocity > 0) {
+                    // Slow down if moving forward
+                    current_velocity -= brake_deceleration * deltaT;
+                    if (current_velocity < 0) {
+                        current_velocity = 0;
+                    }
+                } else {
+                    // Reverse if already stopped
+                    current_velocity -= acceleration * deltaT;
+                    if (current_velocity < -max_speed * 0.5f) { // Reverse speed is half max speed
+                        current_velocity = -max_speed * 0.5f;
+                    }
+                }
+            } else if (space_braking) {
+                // Space bar for quick braking
+                if (current_velocity > 0) {
+                    current_velocity -= brake_deceleration * 1.5f * deltaT;
+                    if (current_velocity < 0) {
+                        current_velocity = 0;
+                    }
+                } else if (current_velocity < 0) {
+                    current_velocity += brake_deceleration * 1.5f * deltaT;
+                    if (current_velocity > 0) {
+                        current_velocity = 0;
+                    }
+                }
+            } else {
+                // Natural deceleration (friction) when no input
+                if (current_velocity > 0) {
+                    current_velocity -= deceleration * deltaT;
+                    if (current_velocity < 0) {
+                        current_velocity = 0;
+                    }
+                } else if (current_velocity < 0) {
+                    current_velocity += deceleration * deltaT;
+                    if (current_velocity > 0) {
+                        current_velocity = 0;
+                    }
+                }
+            }
+            
+            // Move the car based on current velocity
+            if (abs(current_velocity) > 0.01f) { // Only move if velocity is significant
+                glm::vec3 forward_direction = glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
+                                                                   glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1));
+                glm::vec3 new_position = carPos + current_velocity * forward_direction * deltaT;
+                
+                if (check_position(new_position)) {
+                    carPos = new_position;
                     crash_detected = false;
-                                                                       }
-                else {
-                    if (crash_detected== false)
-                        {
+                } else {
+                    // Collision detected - stop the car and apply damage
+                    current_velocity = 0; // Stop immediately on collision
+                    if (!crash_detected) {
                         num_crashes++;
                         crash_detected = true;
-                        if (num_crashes>=MAX_DAMAGE) {
+                        if (num_crashes >= MAX_DAMAGE) {
                             state = GameState::GameOver;
                             GameOver = true;
                         }
                     }
                 }
             }
-
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                {
-                if (check_position(carPos - move_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                                               glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(
-                                                                       0, -1, 0, 1)) * deltaT) == true) {                    carPos -= back_speed * glm::vec3(glm::rotate(glm::mat4(1.0f), carYaw,
-                                                                 glm::vec3(0.0f, 0.0f, 1.0f)) * glm::vec4(0, -1, 0, 1)) *
-                            deltaT;
-                    move_speed = 2.0f;
-                    crash_detected = false;
-                                                                       }
-                else {
-                    if (crash_detected== false) {
-                        num_crashes++;
-                        crash_detected = true;
-                        if (num_crashes>=MAX_DAMAGE) {
-                            state = GameState::GameOver;
-                            GameOver = true;
-                        }
-                    }
+            
+            // Update move_speed for UI display (show current velocity magnitude)
+            move_speed = abs(current_velocity);
+            
+            // Realistic steering - only works when car is moving
+            bool can_steer = abs(current_velocity) > min_steering_speed;
+            
+            if (can_steer) {
+                // Calculate steering responsiveness based on speed
+                // Slower speeds = more responsive steering, faster speeds = less responsive
+                float speed_factor = abs(current_velocity);
+                float steering_multiplier;
+                
+                if (speed_factor <= max_steering_speed) {
+                    // Linear interpolation: full responsiveness at low speed, reduced at high speed
+                    steering_multiplier = 1.0f - (speed_factor / max_steering_speed) * 0.5f;
+                } else {
+                    // Minimum responsiveness for very high speeds
+                    steering_multiplier = 0.5f;
                 }
-            }
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-                carYaw -= deltaT * rotate_speed;
-                objectYaw = -deltaT * rotate_speed;
-                rotate = true;
-
-            }
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-                carYaw += deltaT * rotate_speed;
-                objectYaw = deltaT * rotate_speed;
-                rotate = true;
-
+                
+                // Apply steering with speed-dependent responsiveness
+                // When reversing, steering is inverted (realistic car behavior)
+                float steering_direction = (current_velocity >= 0) ? 1.0f : -1.0f;
+                
+                if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+                    float effective_rotation = deltaT * rotate_speed * steering_multiplier * steering_direction;
+                    carYaw -= effective_rotation;
+                    objectYaw = -effective_rotation;
+                    rotate = true;
+                }
+                if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+                    float effective_rotation = deltaT * rotate_speed * steering_multiplier * steering_direction;
+                    carYaw += effective_rotation;
+                    objectYaw = effective_rotation;
+                    rotate = true;
+                }
+            } else {
+                // Car is too slow to steer - reset rotation flags
+                rotate = false;
+                objectYaw = 0.0f;
             }
             if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
                 cameraYaw += deltaT * rotate_speed;
             }
             if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
                 cameraYaw -= deltaT * rotate_speed;
-            }
-            if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
-                if (move_speed>=2.0f) {
-                    move_speed -=1.0f;
-                }
             }
 
         }        else {
