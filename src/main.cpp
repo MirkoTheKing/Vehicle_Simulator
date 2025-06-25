@@ -72,7 +72,10 @@ protected:
     int num_crashes = 0;
     char instruction[120] = "hi";
     GameState state = GameState::SplashScreen;
+    GameState previousGameState = GameState::GoToPark; // Store state before pause
     bool GameOver = false;
+    bool escKeyWasPressed = false; // Track ESC key state
+    bool pauseTextDisplayed = false; // Track if pause text is already displayed
     Timer timer;
 
     // Fullscreen image rendering components
@@ -108,13 +111,18 @@ protected:
         
         initialBackgroundColor = {0.1f, 0.1f, 0.2f, 1.0f};
         aspectRatio = 4 / 3;
-    }void onWindowResize(int w, int h) {
-        // Only process window resize if we're in a game state (not splash/controls screen)
+    }    void onWindowResize(int w, int h) {
+        // Process window resize for all game states except splash/controls screens
         if (state != GameState::SplashScreen && state != GameState::ControlsScreen) {
             aspectRatio = (float) w / (float) h;
             RP.width = w;
             RP.height = h;
             txt.resizeScreen(w, h);
+            
+            // If we're paused, reset the text flag so pause text repositions correctly
+            if (state == GameState::Paused) {
+                pauseTextDisplayed = false;
+            }
         }
     }    //Here we initialize the descriptor set layouts and our models
     void localInit() {
@@ -306,6 +314,7 @@ protected:
     }    // Method to update window resizability based on current game state
     void updateWindowResizability() {
         // Make window resizable only in game states, not in splash or controls screens
+        // Pause state should keep window resizable since it's part of gameplay
         bool shouldBeResizable = (state != GameState::SplashScreen && state != GameState::ControlsScreen);
         
 
@@ -376,7 +385,28 @@ protected:
         if(state == GameState::SplashScreen || state == GameState::ControlsScreen)
             {
             // No need to update the scene's uniform buffers in splash or controls screens
+        } else if(state == GameState::Paused) {
+            // Only clear and set pause text once when entering pause state
+            if (!pauseTextDisplayed) {
+                txt.removeAllText();
+                
+                // Display centered pause message with consistent styling
+                std::string pauseMessage = "GAME PAUSED";
+                std::string continueMessage = "Press P to continue or ESC to exit";
+                
+                // Use larger, bold text for main pause message with same styling as other UI text
+                txt.print(0.0f, 0.2f, pauseMessage, 1, "CO", false, true, false, TAL_CENTER, TRH_CENTER, TRV_MIDDLE, 
+                         {1.0f, 0.0f, 0.0f, 1.0f}, {0.8f, 0.8f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, 1.5f, 1.5f);
+                
+                // Use normal size text for instructions with same styling as game UI
+                txt.print(0.0f, -0.1f, continueMessage, 2, "CO", false, false, false, TAL_CENTER, TRH_CENTER, TRV_MIDDLE, 
+                         {1.0f, 0.0f, 0.0f, 1.0f}, {0.8f, 0.8f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f, 0.0f}, 1.0f, 1.0f);
+                
+                pauseTextDisplayed = true;
+            }
         } else {
+            // Reset pause text flag when not in pause state
+            pauseTextDisplayed = false;
             std:: ostringstream speed;
             std:: ostringstream crashes;
             std:: ostringstream instr;
@@ -404,7 +434,11 @@ protected:
         double currentTime = glfwGetTime();
           // Check if P key is currently pressed
         int pKeyState = glfwGetKey(window, GLFW_KEY_P);
-        bool pKeyIsPressed = (pKeyState == GLFW_PRESS);        // Detect key press event (transition from not pressed to pressed)
+        bool pKeyIsPressed = (pKeyState == GLFW_PRESS);
+        
+        // Check if ESC key is currently pressed
+        int escKeyState = glfwGetKey(window, GLFW_KEY_ESCAPE);
+        bool escKeyIsPressed = (escKeyState == GLFW_PRESS);        // Detect key press event (transition from not pressed to pressed)
         // Only process if enough time has passed since last press
         if (pKeyIsPressed && !pKeyWasPressed && (currentTime - lastKeyPressTime) > keyDebounceTime)
             {
@@ -425,9 +459,18 @@ protected:
                 // Force a command buffer update to refresh the screen
                 recreateSwapChain();
             }
+            else if (state == GameState::Paused) {
+                // Resume the game from pause
+                state = previousGameState;
+                pauseTextDisplayed = false; // Reset pause text flag
+                timer.resume(); // Resume the timer without resetting elapsed time
+                updateWindowResizability();
+                recreateSwapChain();
+            }
             else if (state == GameState::GameOver || state == GameState::GameWon) {
                 state = GameState::GoToPark;
                 GameOver = false;
+                pauseTextDisplayed = false; // Reset pause text flag
                 carPos = glm::vec3(0.0f);
                 carYaw = 0.0f;
                 objectYaw = 0.0f;
@@ -451,10 +494,30 @@ protected:
             }
         }        // Update the key state for the next frame
         pKeyWasPressed = pKeyIsPressed;
+        
+        // Handle ESC key press for pause functionality
+        if (escKeyIsPressed && !escKeyWasPressed && (currentTime - lastKeyPressTime) > keyDebounceTime) {
+            lastKeyPressTime = currentTime;
+            
+            if (state == GameState::Paused) {
+                // If already paused, ESC exits the game
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            } else if (state != GameState::SplashScreen && state != GameState::ControlsScreen && 
+                      state != GameState::GameOver && state != GameState::GameWon) {
+                // If in game state, ESC pauses the game
+                previousGameState = state;
+                state = GameState::Paused;
+                pauseTextDisplayed = false; // Reset flag to trigger text update
+                timer.stop(); // Pause the timer
+            }
+        }
+        
+        // Update ESC key state for next frame
+        escKeyWasPressed = escKeyIsPressed;
 
-        // If we're in splash or controls screen, we just need to make sure the static
+        // If we're in splash, controls screen, or paused, we just need to make sure the static
         // screen content is displayed - no movement logic needed
-        if(state == GameState::SplashScreen || state == GameState::ControlsScreen) {
+        if(state == GameState::SplashScreen || state == GameState::ControlsScreen || state == GameState::Paused) {
             static bool firstTimeDrawing = true;
             if (firstTimeDrawing)
                 {
@@ -568,6 +631,9 @@ protected:
                 case GameState::SplashScreen:
                     break;
                 case GameState::ControlsScreen:
+                    break;
+                case GameState::Paused:
+                    strcpy(instruction, "GAME PAUSED - Press P to continue or ESC to exit");
                     break;
                 case GameState::GoToPark:
                     SC.TI[0].I[1].Wm[3] = glm::vec4(glm::vec3(41.0871f,-25.9646f,0.0f), 1.0f);

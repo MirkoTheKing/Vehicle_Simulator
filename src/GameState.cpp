@@ -9,5 +9,6 @@ enum class GameState{
   GoToSecFactory,
   Return,
   GameOver,
-  GameWon
+  GameWon,
+  Paused
 };
