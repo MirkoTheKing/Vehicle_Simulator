@@ -17,15 +17,18 @@
 struct UniformBufferObject {
     alignas(4) float amb;
     alignas(4) float gamma;
+    alignas(4) float metalic;
+    alignas(4) float roughness;
+    alignas(16) glm::vec3 baseColor;
     alignas(16) glm::vec3 sColor;
     alignas(16) glm::mat4 mvpMat;
-    alignas(16) glm::mat4 nMat;
     alignas(16) glm::mat4 mMat;
+    alignas(16) glm::mat4 nMat;
 };
 
 struct GlobalUniformBufferObject {
     alignas(16) glm::vec3 lightDir;
-    alignas(16) glm::vec4 lightColor;
+    alignas(16) glm::vec3 lightColor;
     alignas(16) glm::vec3 ambLightColor;
     alignas(16) glm::vec3 eyePos;
 };
@@ -386,8 +389,16 @@ protected:
             ubo.mvpMat = Prj * View * ubo.mMat;
             ubo.nMat = glm::inverse(glm::transpose(ubo.mMat));
             ubo.amb = 0.3f;
-            ubo.gamma = 180.0f;
+            ubo.gamma = 1.0f;
             ubo.sColor = glm::vec3(0.8f);
+            if (instanceId == 0) {
+                ubo.metalic = 0.8f;
+                ubo.roughness = 0.01f;
+            }
+            else {
+                ubo.metalic = 0.2f;
+                ubo.roughness = 0.8f;
+            }
             SC.TI[0].I[instanceId].DS[0][0]->map(currentImage, &gubo, 0); // Set 0
             SC.TI[0].I[instanceId].DS[0][1]->map(currentImage, &ubo, 0); // Set 1
         }
@@ -450,7 +461,8 @@ protected:
         }
 
         txt.updateCommandBuffer();
-    }    void gameLogic(GLFWwindow *window)
+    }
+    void gameLogic(GLFWwindow *window)
     {
         // Improved key handling with proper debounce timing
         static bool pKeyWasPressed = false;
