@@ -30,6 +30,18 @@ public:
         stopped = true;
       }
 
+      void resume() {
+        if (stopped) {
+          stopped = false;
+          // Update lastTime to current time to avoid large delta when resuming
+          lastTime = std::chrono::high_resolution_clock::now();
+          // Adjust startTime to maintain the same elapsed time
+          auto pauseDuration = lastTime - startTime;
+          startTime = lastTime - std::chrono::duration_cast<std::chrono::high_resolution_clock::duration>(
+            std::chrono::duration<float>(elapsed));
+        }
+      }
+
     private:
     std::chrono::high_resolution_clock::time_point startTime;
     std::chrono::high_resolution_clock::time_point lastTime;
