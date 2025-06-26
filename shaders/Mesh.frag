@@ -12,6 +12,15 @@ layout(set = 0, binding = 0) uniform GlobalUniformBufferObject {
     vec3 DlightColor;
     vec3 AmbLightColor;
     vec3 eyePos;
+
+    vec3 headlightPos;
+    vec3 headlightDir;
+    float headlightCutoff;
+    float headlightOuterCutoff;
+    float headlightIntensity;
+    vec3 headlightColor;
+
+
 } gubo;
 
 layout(set = 1, binding = 0) uniform UniformBufferObject {
@@ -46,4 +55,5 @@ void main() {
 
     vec3 color = clamp(diffuse + specular + ambient, 0.0, 1.0);
     outColor = vec4(color, 1.0);
+
 }

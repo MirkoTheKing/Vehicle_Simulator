@@ -8,8 +8,8 @@
 #include "Timer.cpp"
 // this should work, i am doing it to try and  do a pull request
 
-#define Width 800
-#define Height 600
+#define Width 1920
+#define Height 1080
 #define MAX_DAMAGE 5
 
 
